@@ -1,0 +1,7 @@
+.glitch-header {
+    font-family: "hwaguhwa";
+    font-size: 100px;
+    text-align: center;
+    font-weight: 300;
+    transform: rotateZ(2deg) rotateX(25deg);
+}
