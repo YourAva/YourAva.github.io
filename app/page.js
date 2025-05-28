@@ -64,7 +64,6 @@ export default function Home() {
                 </div>
                 <div className="w-1/2 h-20 flex p-2 self-center m-auto">
                   <div className="flex h-12 m-auto">
-                    <Social text="Discord" link="https://discord.gg/pBfsUR7ecb" image="logos/discord.png"></Social>
                     <Social text="Bsky" link="https://bsky.app/profile/avalikesbread.bsky.social" image="logos/bskylogo.png"></Social>
                   </div>
                 </div>
