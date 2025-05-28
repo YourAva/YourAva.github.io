@@ -24,11 +24,13 @@ export default function Home() {
                   <p className="marquee-border">/</p>
                     <p className="pr-8 pl-8 font-bold text-green-500">Kael's feet smell</p>
                   <p className="marquee-border">/</p>
+                    <p className="pr-8 pl-8">Finleyrhino might be a furry</p>
+                  <p className="marquee-border">/</p>
                     <div className="ml-96"/>
                   <p className="marquee-border">/</p>
                     <a className="pr-8 pl-8 font-bold text-red-800" href="https://open.spotify.com/artist/2OWIoPkGaQLHWxHSeFTfYi?si=y4wSvsreRhef925zP0ytPQ">♫ End Of The Deep Web -- Ohm-N-I ♫</a>
                   <p className="marquee-border">/</p>
-                  <p className="pr-8 pl-8">&#60;-- CLICK IT!</p>
+                    <p className="pr-8 pl-8">&#60;-- CLICK IT!</p>
                   <p className="marquee-border">/</p>
                 </div>
               </marquee>
