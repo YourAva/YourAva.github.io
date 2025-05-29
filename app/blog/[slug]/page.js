@@ -79,9 +79,12 @@ export default function BlogPostPage() {
         <div className="w-full bg-amber-400 h-2"></div>
       </div>
       <h1 className="text-2xl font-bold post-title">{post.title}</h1>
-      <div className="w-1/2 flex items-center justify-center mx-auto" style={{fontSize:"25px"}}>
+      <div className="w-1/2 flex items-center justify-center mx-auto pb-96" style={{fontSize:"25px"}}>
         <div dangerouslySetInnerHTML={{ __html: post.content }} />
       </div>
+      </div>
+      <div className="bottom-0 w-full h-3.5 p-32">
+        <p className="text-gray-900 pb-6 text-center hover:text-gray-400 transition">If you're an artist and want your music removed from the site, contact me on bsky and It'll be taken down &#60;3<br/>Do keep in mind that views are still given when the music is played in the background.</p>
       </div>
     </div>
   );

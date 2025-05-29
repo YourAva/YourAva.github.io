@@ -40,6 +40,11 @@ p {
 
 a {
   font-family: "Quantico", sans-serif;
+  color:#fbbf24;
+}
+
+a:hover {
+  text-decoration: underline;
 }
 
 .lines {
@@ -86,4 +91,20 @@ h1 {
 
 .marquee-border {
   transform: scale(1.5, 2);
+}
+
+code {
+  background-color: #141414;
+  border-radius: 10px;
+  padding: 5px;
+  width: fit-content;
+  height: fit-content;
+  font-family: "Quantico", sans-serif;
+}
+
+.content {
+  display: block;
+  margin: auto;
+  width: 50%;
+  padding: 10px;
 }

@@ -73,7 +73,7 @@ export default function Home() {
             </div>
             <div className="flex justify-center">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-1/2">
-                {Object.entries(blogPosts).map(([slug, post], index) => (
+                {Object.entries(blogPosts).reverse().map(([slug, post], index) => (
                   <a href={`/blog/${slug}`}>
                     <div key={index} className="p-4 border rounded">
                       <h2 className="text-xl font-bold">{post.title}</h2>
@@ -83,6 +83,9 @@ export default function Home() {
                   </a>
                 ))}
               </div>
+            </div>
+            <div className="bottom-0 w-full h-3.5 p-32">
+              <p className="text-gray-900 pb-6 text-center hover:text-gray-400 transition">If you're an artist and want your music removed from the site, contact me on bsky and It'll be taken down &#60;3<br/>Do keep in mind that views are still given when the music is played in the background.</p>
             </div>
           </ClientDisclaimer>
         </div>
