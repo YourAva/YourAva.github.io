@@ -29,6 +29,7 @@ const blogPosts = {
       songAuthor: "Pisca",
       songLink: "https://www.youtube.com/embed/JKs--_lKYeo?si=0d2Hj7MbZG0Zzzez",
       image: "https://substackcdn.com/image/fetch/f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ff08bfeb5-7faa-4270-a9e1-b81d353ec22d_1200x675.jpeg",
+      date: "29-05-2025",
       content: `<p>XSS (A.K.A. Cross-site scripting) is the method of using html tags in a websites user input to display arbitrary data within a webpage, for example, using <code>&lt;h1&gt;Header&lt;h1/&gt;</code> within a comment in a
       blog to make your text a header element rather than what it would normally be display as.<p/><br/>
       <h1>Looking for XSS</h1>

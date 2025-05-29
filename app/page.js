@@ -75,7 +75,7 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-1/2">
                 {Object.entries(blogPosts).reverse().map(([slug, post], index) => (
                   <a href={`/blog/${slug}`}>
-                    <div key={index} className="p-4 border rounded">
+                    <div key={index} className="p-4 border rounded hover:scale-105 duration-500">
                       <h2 className="text-xl font-bold">{post.title}</h2>
                       <p className="text-sm text-gray-500">{post.date}</p>
                       <p className="mt-2">{post.description.slice(0, 100)}...</p>
