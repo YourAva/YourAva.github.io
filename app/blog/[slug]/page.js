@@ -25,12 +25,25 @@ export default function BlogPostPage() {
   const post = blogPosts[slug];
   const baseUrl = post.songLink.split("?")[0];
   const videoId = baseUrl.split("/").pop();
+  
   if (!post) {
     return <div className="p-4 text-red-500">404: Post not found</div>;
   }
   if (post.image === null) {
     post.image="/header.png"
   }
+
+  const headings = [];
+  let modifiedContent = post.content.replace(/<h1>(.*?)<\/h1>/gi, (match, headingText) => {
+    const slug = headingText
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .trim()
+      .replace(/\s+/g, "-");  
+    headings.push({ text: headingText, id: slug });
+    return `<h1 id="${slug}">${headingText}</h1>`;
+  });
+
 
   return (
     <div>
@@ -43,6 +56,10 @@ export default function BlogPostPage() {
               <p className="pr-8 pl-8">Ava was here</p>
             <p className="marquee-border">/</p>
               <p className="pr-8 pl-8 font-bold text-green-500">Kael's feet smell</p>
+            <p className="marquee-border">/</p>
+              <p className="pr-8 pl-8">Finleyrhino might be a furry</p>
+            <p className="marquee-border">/</p>
+              <p className="pr-8 pl-8 text-pink-500">swag_apple has declared war upon herself</p>
             <p className="marquee-border">/</p>
               <div className="ml-96"/>
             <p className="marquee-border">/</p>
@@ -79,9 +96,33 @@ export default function BlogPostPage() {
         <div className="w-full bg-amber-400 h-2"></div>
       </div>
       <h1 className="text-2xl font-bold post-title">{post.title}</h1>
-      <div className="w-1/2 flex items-center justify-center mx-auto pb-96" style={{fontSize:"25px"}}>
-        <div dangerouslySetInnerHTML={{ __html: post.content }} />
+      
+      <div className="grid grid-cols-3 gap-4 grid-cols-[1fr_5fr_1fr] w-full">
+      <div className="">
+        <div className="pl-5 sticky top-40 h-fit mr-4 ml-auto">
+          <ul className="list-disc pl-4">
+            {headings.map(h => (
+              <li key={h.id} className="mb-2 list-none">
+                <a href={`#${h.id}`} className="text-blue-600 hover:text-blue-400">
+                  <div className="p-1 border rounded hover:scale-105 duration-500 border-amber-400">
+                    <p className="text-amber-400">{h.text}</p>
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
+
+      <div className="flex justify-center">
+        <div className="max-w-[1200px] w-full text-xl">
+          <div dangerouslySetInnerHTML={{ __html: modifiedContent }} />
+        </div>
+      </div>
+
+      <div className=""></div>
+      </div>
+      
       </div>
       <div className="bottom-0 w-full h-3.5 p-32">
         <p className="text-gray-900 pb-6 text-center hover:text-gray-400 transition">If you're an artist and want your music removed from the site, contact me on bsky and It'll be taken down &#60;3<br/>Do keep in mind that views are still given when the music is played in the background.</p>
