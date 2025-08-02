@@ -114,7 +114,7 @@ const blogPosts = {
       to offer along with it. If you see any misinformation or things that could do with clarifying on this post feel free to contact me wherever is linked around the website.</p>`
     },
     "basics-of-hooking": {
-      title: "basics_of_hooking.blg",
+      title: "Basics_Of_Hooking.blg",
       description: "This guide goes over the fundamentals of hooking, a practice where a function is forced to JMP to another via memory manipulation during runtime.",
       song: "Deadlight",
       songAuthor: "Nfract",
