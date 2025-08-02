@@ -112,6 +112,122 @@ const blogPosts = {
       <p>A file upload vulnerability is a great way to get a foothold into a website however it requires an intricate knowledge of a servers backend or lazy sanitisation techniques to exploit. If you want to go further with some real
       resources or try out what you've learned in some labs I heavily recommend (as always) <a href="https://portswigger.net/web-security/file-upload">PortSwiggers documentation</a> on the vulnerability along with the labs they have
       to offer along with it. If you see any misinformation or things that could do with clarifying on this post feel free to contact me wherever is linked around the website.</p>`
+    },
+    "basics-of-hooking": {
+      title: "basics_of_hooking.blg",
+      description: "This guide goes over the fundamentals of hooking, a practice where a function is forced to JMP to another via memory manipulation during runtime.",
+      song: "Deadlight",
+      songAuthor: "Nfract",
+      songLink: "https://www.youtube.com/embed/b3gnsHmXnn8?si=wQUWihr_K1n7Uukh",
+      image: "https://w.wallhaven.cc/full/0j/wallhaven-0jeldw.png",
+      date: "02-08-2025",
+      content: `<p>If you've ever interacted with a modified version of software such as a modded game or a cracked application, chances are you've used hooking before, but what actually is it? Hooking is a technique used by hackers to
+      intercept and modify behaviour of software components. Imagine it like this.. If we had a software that ran a function <code>checkLicense()</code> that returned 'True' if someone had a valid license and could use the software, then
+      hooking could be used to 'overwrite' the function and give a hacker control of how the software checks the license, which is a powerful ability to have. In this post I'll go over a basic hook creation program and how it works, for
+      more advanced concepts such as trampoline hooks, you'll have to look elsewhere for now.</p>
+      <h1>Conceptual Overview</h1>
+      <p>Before we do anything we need to understand exactly how we create a hook in the first place. Luckily, it's not too hard of a concept to understand...
+      <br/><br/>1. Get the memory address of the function we're hooking and the function we want to 'overwrite' it with
+      <br/>2. Change the permissions of the memory we're writing to to PAGE_EXECUTE_READWRITE
+      <br/>3. Write the new instructions to the starting bytes of the function we're overwriting
+      <br/>4. Change the permissions of the memory we written to back to what it was originally (Optional but recommended)
+      <br/><br/>Okay, now we've outlined the steps to actually do this, let's get into the code part. I'll be pulling all code referenced here from <a href="https://github.com/YourAva/PlatyHook/tree/master">My hooking Github Repo</a>.</p>
+      <h1>Code Review</h1>
+      <p>PlatyHook.cpp</p>
+      <codeblock>#include &ltWindows.h&gt
+#include &ltiostream&gt
+#include "header.hpp"
+
+int main() {
+    std::string superSecretPassword = "Password123";
+    hijack_me(superSecretPassword);
+    create_hook(get_me_running, hijack_me);
+    hijack_me(superSecretPassword);
+  }</codeblock>
+  <br/>
+  <p>header.hpp</p>
+      <codeblock>#include &ltWindows.h&gt
+#include &ltiostream&gt
+#include &ltstring&gt
+
+#define STATUS_SUCCESS ((NTSTATUS)0x00000000L)
+#define okay(msg, ...) printf("[+] " msg "\n", ##__VA_ARGS__)
+#define info(msg, ...) printf("[i] " msg "\n", ##__VA_ARGS__)
+#define warn(msg, ...) printf("[-] " msg "\n", ##__VA_ARGS__)
+
+BOOL hijack_me(std::string password) {
+    std::cout << "[hijack_me()] Password: " << password << "\\n";
+    return FALSE;
+}
+
+BOOL get_me_running(std::string password) {
+    std::cout << "[get_me_running()] Password: " << password << "\\n";
+    return TRUE;
+}
+
+NTSTATUS create_hook(LPVOID lpToRun, LPVOID lpTarget) {
+    byte patch[14] = { 0xFF, 0x25,0x00,0x00,0x00,0x00 };
+    DWORD oldProtect;
+    byte oldData[14];
+
+    okay("Found the memory address of get_me_running\\n\\t\\\\__%p", lpToRun);
+    okay("Found the memory address of hijack_me\\n\\t\\\\__%p", lpTarget);
+
+    memcpy(patch + 6, &lpToRun, sizeof(lpToRun));
+    okay("JMP Injection has been written to patch[14]");
+
+    VirtualProtect(lpTarget, sizeof(patch), PAGE_EXECUTE_READWRITE, &oldProtect);
+
+    memcpy(lpTarget, patch, sizeof(patch));
+
+    VirtualProtect(lpTarget, sizeof(patch), oldProtect, &oldProtect);
+
+    return STATUS_SUCCESS;
+}</codeblock>
+
+      <p><br/>Okay, first we'll take a look at the PlatyHook.cpp holding our entrypoint. As we can see here it's defining a string variable called <code>superSecretPassword</code> and then calling <code>hijack_me()</code> whilst passing
+      in that variable as a parameter. Then, it runs <code>create_hook()</code> passing the <code>get_me_running()</code> and <code>hijack_me()</code> functions without their closing brackets to the LPVOID type before runnign <code>
+      hijack_me()</code> one more time. So, let's take a deeper look at what these functions actually do.
+      
+      <br/><br/><code><b>hijack_me()</b></code> - This function prints out whatever variable was passed to it and then returns FALSE. In this example this will be the function we're trying to 'overwrite'
+      <br/><code><b>get_me_running()</b></code> - This function prints out whatever variable was passed to it and then returns TRUE. In this example this will be the function we're trying to 'overwrite' <code>hijack_me()</code> with.
+      
+      <br/><br/>Now, let's get into the main grit of this code that actually creates the hook, the <code>create_hook()</code> function.
+      </p>
+      <h1>create_hook()</h1>
+      <p>This function does all the steps mentioned earlier inside of the <a href=#conceptual-overview>Conceptual Overview</a>, if you haven't read that section yet I highly recommend it to understand the following section. Firstly, we
+      need to grab the memory address of the functions we're going to be messing with, luckily, we already did this when calling the function. The function create_hook takes two LPVOID types. So, when we call the function if we pass two
+      functions lacking their ending brackets it will automatically fetch the memory address they're located at. Easy enough!
+      
+      Next, we need to allow for writing in the space we're going to be writing to-- however, we don't actually **know** what we're writing yet, or the size of it. This is a necessary prerequisite to this step, so let's figure
+      it out. You may have noticed the <code>byte patch[14] = { 0xFF, 0x25,0x00,0x00,0x00,0x00 };</code> at the start of the function definition. Especially observant readers may recognise this already to be a JMP assembly instruction.
+      In short, it's telling the computer to move what memory it's executing to another part in memory. It's a bit like jumping ahead in a book. However, we haven't actually told the computer where it should jump to. Since we want to
+      execute our own function, it needs to be the memory address of our <code>get_me_running()</code> function. So, to fully create our final instructions we need to do something like this <code>memcpy(patch + 6, &lpToRun, sizeof(lpToRun));</code>.
+      If you're wondering why we're adding 6 to the starting address this is so we can miss the first opcode instructions telling the computer to JMP. Your instruction should conceptually look something like this now...
+      <img src="/blogdata/02-08-25/jmp.png"></img><br/><br/>
+      Now we have the instructions we want to execute in our source function we're going to write it, as I said a moment a go, we need to apply the correct permissions first which we'll do using the Windows <a href="https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect"><code>VirtualProtect()</code>
+      </a> function. This takes four arguments...
+      <br/>- <b>LPVOID lpAddress</b> - Where the span of memory address being changed should start
+      <br/>- <b>SIZE_T dwSize</b> - The size of the span of memory being changed
+      <br/>- <b>DWORD flNewProtect</b> - The new permissions being given to the space in memory
+      <br/>- <b>PDWORD lpflOldProtect</b> - Pointer to a DWORD variable that can hold the old permission of that span of memory (we'll need this later)
+      <br/>We're basically fully setup to run this function besides lpflOldProtect which can easily be defined: <code>DWORD oldProtect;</code>. Once that's defined, we can call the function like this <code>VirtualProtect(lpTarget, sizeof(patch), PAGE_EXECUTE_READWRITE, &oldProtect);</code>
+      <br/><br/>Now we can write to this memory, we'll make use of memcpy again. This time we'll feed it the starting memory address of our source function, the full instructions we want to inject and the size of those instructions <code> memcpy(lpTarget, patch, sizeof(patch));</code>
+      and wallah, if we build and run this our second call of our source function should run whatever is inside of <code>get_me_running()</code>
+      <br/><br/>We should also run a bit of cleanup and remove the edited permissions we provided to the memory address of our source function earlier, so we'll use the <a href="https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect"><code>VirtualProtect()</code></a>
+      function again, passing in the source function's memory address and setting the flNewProtect parameter to the data we placed inside the <code>oldProtect</code> value last time we ran <code>VirtualProtect.</code> after we do this our
+      hook is complete and should run fine!</p> 
+      <h1>Troubleshooting</h1>
+      <p>When it comes to troubleshooting programs like this truthfully there's not much advice I can give besides telling you to ensure you're compiling your program as an x64 program and decompiling it using a decompiler such as x64dbg.
+      If you do decided to use x64dbg you can place <code>__debugbreak();</code> anywhere in your program to form a breakpoint, x64dbg will stop at these points whenever it comes to them so you can get a better understanding as to where
+      you are in your programs execution.</p>
+      <h1>Grabbing parameters</h1>
+      <p>You may have noticed earlier that my <code>get_me_running()</code> function was grabbing the same string arguments my source function was. This is fully intentional. When you hook a function whatever function you redirect it to
+      will be able to access the same arguments that were passed to the source function. This is why hooking is so popular when it comes to hacking games as it can allow a hacker to grab data such as an entity list which can help support
+      their hacks, In the example code I've used it to grab the <code>superSecretPassword</code> I passed into the function at the beginning.</p>
+      <h1>Conclusion</h1>
+      <p>If you feel some concepts could use better clarification or you need some support in your programming feel free to contact me on any social media listed on the site and I'll try to see if I can help. Thanks for reading.</p>
+      `  
     }
   };
   

@@ -108,3 +108,17 @@ code {
   width: 50%;
   padding: 10px;
 }
+
+codeblock {
+  display: block;
+  width: 100%;
+  background-color: #1e1e1e;
+  color: #dcdcdc;
+  font-family: monospace;
+  padding: 15px;
+  margin: 0; /* ← resets any default margin */
+  border-radius: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  box-sizing: border-box;
+}
