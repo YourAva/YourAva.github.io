@@ -497,8 +497,8 @@ int main() {
     <p>So, Return address spoofing seems like a great method of avoiding detection. Wouldn't that be nice! (it isn't.) In truth, return address spoofing is outdated. New techniques such as stack unwinding where an AV/EDR
     walks the stack counter return address spoofing. This method might still work against primitive forms of AV/EDR's but truthfully, it's nowhere near a high quality technique.</p>
     <h1>Conclusion</h1>
-    If you feel some concepts could use better clarification or you need some support in your programming feel free to contact me on any social media listed on the homepage and I'll try to see if I can help. I've tried my
-    hardest to keep information abstracted as little as possible whilst keeping it somewhat readable, so I apologise if certain areas seem too wordy or convoluted. Thanks for reading.
+    <p>If you feel some concepts could use better clarification or you need some support in your programming feel free to contact me on any social media listed on the homepage and I'll try to see if I can help. I've tried my
+    hardest to keep information abstracted as little as possible whilst keeping it somewhat readable, so I apologise if certain areas seem too wordy or convoluted. Thanks for reading.</p>
     <h1>Appendicies</h1>
     <p>
     <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <a href="https://hulkops.gitbook.io/blog/red-team/x64-return-address-spoofing">HulkOps return address spoofing article</a>
