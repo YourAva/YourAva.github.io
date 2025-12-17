@@ -75,6 +75,13 @@ h1 {
   font-weight: 300;
 }
 
+h3 {
+  font-family: "oujfhawu9";
+  font-size: 30px;
+  text-align: center;
+  font-weight: 300;
+}
+
 .lines:before {
 	content: '';
 	position: absolute;
