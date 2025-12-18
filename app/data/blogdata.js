@@ -238,17 +238,21 @@ NTSTATUS create_hook(LPVOID lpToRun, LPVOID lpTarget) {
       date: "17-12-2025",
       content:`<p>Recently, I've been learning about a new technique in malware development to avoid detection called return address spoofing. This article will go over everything I've learned and how to do return address spoofing within x64
       architecture. All resources I've used to build my knowledge will be referenced in the <a href="#appendicies">Appendicies</a> section. Light understanding of assembly, x64 architecture and the stack is necessary for this post.</p>
-      <h1>AV/EDR Behaviour</h1>
-      <p>When a process such as Kernel32 tries to execute
-      certain commands AV/EDR's will allow that spesific process to make these actions as it is a known process meaning it can't be doing anything malicious. However, when we develop software that
-      does the same thing AV/EDR's aren't likely to allow us to do so because it's coming from an unknown, random process. The goal of Return Address Spoofing is to make AV/EDR's think our unknown software's calls
-      are actually coming from these trusted programs.</p>
-      <br/>
       <h1>Backed & Unbacked memory</h1>
-      <p>This also links into "backed" and "unbacked" memory. When a process such as Kernel32 makes function calls, this is coming from a backed part of memory as the process has been mapped into the memory by Windows
-      itself. However, if you're familiar with malware development, you'll know we tend to manually map malware into memory without the help of Windows meaning when we make function calls from our manually mapped
-      programs, they are coming from unbacked memory. This is extremely suspicious and will be flagged by any good AV/EDR.</p>
+      <p>Firstly, let's define backed and unbacked memory.
       <br/>
+      <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <b>BACKED MEMORY</b>
+      <br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;> When a DLL or EXE is loaded into memory by windows the windows kernel gives it the SEC_IMAGE flag in the region it's occupying, signifying that the memory is
+      backed by a file on the disk.
+      <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <b>UNBACKED MEMORY</b>
+      <br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;> A DLL or EXE that has not been loaded into memory by windows meaning it does not have the SEC_IMAGE flag and is not backed by a file on the disk. Unbacked
+      memory is not common for normal processes and is highly suspicious to AV/EDR's as it can be linked to anti detection techniques.
+      <br/></p><br/>
+      <p>If you're familiar with malware development, you'll know touching the disk is always a bad idea. This therefore means our malware should never have the ability to be backed by a file, meaning it will sit in
+      unbacked memory.</p>
+      <h3>AV/EDR Behaviour</h3>
+      <p>So, let's say we have our program manually mapped to memory, meaning it's sitting in unbacked memory. If we wanted to interact with a DLL such as kernel32, an AV/EDR would see this call coming from an unbacked
+      memory address and immediately flag it, likely leading to the AV/EDR terminating the process.</p></br>
       <p>To show how obvious a call from unbacked memory is, I've provided a screenshot of a manually mapped thread that creates a DialogBox being opened in
       <a href="https://systeminformer.sourceforge.io/">systemInformer</a>. I've left the code I used to create this <a href="/blogdata/17-12-25/unbackedMemoryFunctionCall.cpp">here</a> if you'd like to reproduce it.
       <br/>
