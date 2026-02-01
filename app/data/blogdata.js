@@ -285,8 +285,7 @@ NTSTATUS create_hook(LPVOID lpToRun, LPVOID lpTarget) {
       the specified instructions.
       <br/><br/>
       The following code block is a function that will use GetModuleHandleA() to get a handle to the library we want (kernel32) by name. It will then use this handle to explore the NT Header of the library to find
-      the size of it, then iterating throughout all the contents of the library based on the retrieved size for the <code>jmp [rbx]</code> instructions. Once we find the gadget within the library we return the pointer to the gadget.</p>
-      <br/>
+      the size of it, then iterating throughout all the contents of the library based on the retrieved size for the <code>jmp [rbx]</code> instructions. Once we find the gadget within the library we return the pointer to the gadget.</p><br/>
       <codeblock>UINT64 FindGadget() {
 	PBYTE hModule = (PBYTE)GetModuleHandleA("kernel32");
 	DWORD dwSize = ((PIMAGE_NT_HEADERS64)(hModule + ((PIMAGE_DOS_HEADER)hModule)->e_lfanew))->OptionalHeader.SizeOfImage;
@@ -347,14 +346,15 @@ NTSTATUS create_hook(LPVOID lpToRun, LPVOID lpTarget) {
 	return TRUE;
 }</codeblock><br/>
       <h3>Assembly</h3>
-      <p>x64 windows uses something called <a href="https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170">fastcall</a>. In short, this means the first four <b>integer</b> arguments supplied
+      <p>x64 windows uses a <a href="https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170">calling convention</a> similar to fastcall. In short, this means the first four <b>integer</b> arguments supplied
       to a function are stored in these registers in the following order...
       <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <code>RCX</code>
       <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <code>RDX</code>
       <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <code>R8</code>
       <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <code>R9</code>
       <br/>&nbsp;&nbsp;&nbsp;&nbsp;- Any other supplied arguments are placed onto the stack
-      <br/>An odd number of arguments means a padding of 8 bytes will be at the bottom of the stack's argument listing to keep the stack aligned. In addition to this, before the function is called, 32 bits need to be
+      <br/>Before a function is executed, the stack must be 16 byte aligned or else the call will result in a page fault or general protection fault if run. So, an odd number of arguments means a padding of 8 bytes must be at the bottom of the stacks argument listing
+      in order to keep the stack 16 byte aligned. In addition to this, before the function is called, 32 bytes need to be
       allocated onto the stack. This is known as the "shadow space" and exists so the called function can save the contents of the first four volatile integer arguments stored on registers to memory if necessary.<br/>
       <br/>
       Now that's cleared up, let's make an external reference to the assembly code in C++ and get to writing our assembly.
@@ -408,8 +408,8 @@ loop_start:
 	mov [r15], rax											;writing argument on the stack
 	sub r12, 8												;decrementing the counter
 	jmp loop_start</codeblock><br/>
-    <p>Once the loop is complete, we'll add our shadow space and push the address of our gadget to the stack to make it our brand new return address. We then modify the value of rbx to the address of "cleanup" so
-    when the gadget runs <code>JMP RBX</code> it will JMP to our cleanup code giving us control once again. Once this is complete, we can jump to our target function and let it execute with certainty it will
+    <p>Once the loop is complete, we'll add our shadow space and push the address of our gadget to the stack to make it our brand new return address. We then modify the value of rbx to point to the memory location that contains the address of our cleanup
+    label so when the gadget uses <code>jmp [rbx]</code> it dereferences the cleanup address and jumps to it. Once this is complete, we can jump to our target function and let it execute with certainty it will
     be redirected back to us.</p><br/>
     <codeblock>loop_end:
 	mov r13d, [r10 + Config.dwArgCount]						;storing the argument count a in non-volatile register	
@@ -423,10 +423,10 @@ loop_start:
 	jmp r12</codeblock><br/>
     <p>Finally, we need to define cleanup which will simply revert the stack back to its original state and return us back to wherever Spoof was called from.</p><br/>
     <codeblock>cleanup:
-	
 	lea r13, [r13 * 8]
 	add rsp, r13											;reverting stack to its original state
 	jmp rdi</codeblock><br/>
+    <p><i>Readers have made me aware that ABI requires non-volatile register that have been modified (RBX, RDI, R12, R13, R15) need to be restored within cleanup for perfect return address spoofing. Keep this in mind.</i></p>
   
     <h3>Bringing it all together</h3>
     <p>Now that's all done, all we need to do is just bring our code together within main and voilà, we've successfully created return address spoofing.</p><br/>
@@ -499,7 +499,7 @@ int main() {
     <img style="display: block; margin: auto; width: 80%; padding: 10px;" src="/blogdata/17-12-25/ReturnedMain.png"/>
     <h1>Caviats</h1>
     <p>So, Return address spoofing seems like a great method of avoiding detection. Wouldn't that be nice! (it isn't.) In truth, return address spoofing is outdated. New techniques such as stack unwinding where an AV/EDR
-    walks the stack counter return address spoofing. This method might still work against primitive forms of AV/EDR's but truthfully, it's nowhere near a high quality technique.</p>
+    walks the stack counter return address spoofing, other methods such as <a href="https://www.offsec.com/blog/intel-cet-in-action/">Intel CET</a> also combat return address spoofing. This method might still work against primitive forms of AV/EDR's but truthfully, it's nowhere near a high quality technique.</p>
     <h1>Conclusion</h1>
     <p>If you feel some concepts could use better clarification or you need some support in your programming feel free to contact me on any social media listed on the homepage and I'll try to see if I can help. I've tried my
     hardest to keep information abstracted as little as possible whilst keeping it somewhat readable, so I apologise if certain areas seem too wordy or convoluted. Thanks for reading.</p>
@@ -509,6 +509,16 @@ int main() {
     <br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\\_This was such a help to the creation of this article. Thanks a ton to HulkOps.
     <br/>&nbsp;&nbsp;&nbsp;&nbsp;- <a href="https://chatgpt.com">ChatGPT</a>
     <br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\\_Used responsibly to help me get a better understanding of some concepts I had trouble getting a grasp of.
+    </p>
+    <h1>Edits</h1>
+    <p>
+    Edits are changes made after the original release of the article, often suggested by readers.<br/>
+    <br/>&nbsp;&nbsp;&nbsp;&nbsp;- Fixed an issue where I stated Windows uses fastcall where it really uses its own, similar version.
+    <br/>&nbsp;&nbsp;&nbsp;&nbsp;- Fixed an error where I stated shadow space was 32 bits and not 32 bytes.
+    <br/>&nbsp;&nbsp;&nbsp;&nbsp;- Made stack alignment explanation clearer
+    <br/>&nbsp;&nbsp;&nbsp;&nbsp;- Fixed logic in explanation regarding <code>rbx</code> register being a pointer
+    <br/>&nbsp;&nbsp;&nbsp;&nbsp;- Referenced Intel CET
+    <br/>&nbsp;&nbsp;&nbsp;&nbsp;- Referenced the stack cleanup not cleaning all non-volatile registers.
     </p>
     `
     }
