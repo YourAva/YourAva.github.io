@@ -426,7 +426,7 @@ loop_start:
 	lea r13, [r13 * 8]
 	add rsp, r13											;reverting stack to its original state
 	jmp rdi</codeblock><br/>
-    <p><i>Readers have made me aware that ABI requires non-volatile register that have been modified (RBX, RDI, R12, R13, R15) need to be restored within cleanup for perfect return address spoofing. Keep this in mind.</i></p>
+    <p><i>Readers have made me aware that ABI requires non-volatile registers that have been modified (RBX, RDI, R12, R13, R15) need to be restored within cleanup for perfect return address spoofing. Keep this in mind.</i></p>
   
     <h3>Bringing it all together</h3>
     <p>Now that's all done, all we need to do is just bring our code together within main and voilà, we've successfully created return address spoofing.</p><br/>
